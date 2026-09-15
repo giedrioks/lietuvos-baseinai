@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lietuvos miestų baseinai — žemėlapis</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --deep:   #0d2b3e;
+    --water:  #146b83;
+    --aqua:   #2ea3a8;
+    --foam:   #eef6f5;
+    --sand:   #e8ab55;
+    --ink:    #10222b;
+    --muted:  #5c7680;
+    --card:   #ffffff;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color:var(--ink);
+    background:var(--foam);
+  }
+  #app{ height:100vh; display:flex; flex-direction:column; }
+
+  header{
+    background: linear-gradient(120deg, var(--deep), var(--water) 70%);
+    color:#f2fbfa;
+    padding:18px 24px 16px;
+    display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+    box-shadow:0 2px 10px rgba(13,43,62,0.25);
+    z-index:20; position:relative;
+  }
+  header h1{
+    margin:0; font-size:1.35rem; font-weight:700; letter-spacing:0.2px;
+  }
+  header .count{
+    font-size:0.82rem; color:#b9e4e0; font-weight:500;
+  }
+  header .hint{
+    margin-left:auto; font-size:0.78rem; color:#bfe1de;
+    display:flex; align-items:center; gap:6px;
+  }
+  header .hint svg{ width:14px; height:14px; flex:none; }
+
+  #mapwrap{ flex:1; position:relative; min-height:0; }
+  #map{ position:absolute; inset:0; background:#dfeef0; }
+
+  /* Leaflet marker override */
+  .pool-pin{
+    width:26px; height:26px;
+    border-radius:50% 50% 50% 0;
+    background:var(--aqua);
+    border:2px solid #ffffff;
+    box-shadow:0 2px 6px rgba(13,43,62,0.45);
+    transform: rotate(-45deg);
+    display:flex; align-items:center; justify-content:center;
+    transition: transform 120ms ease, background 120ms ease;
+  }
+  .pool-pin::after{
+    content:"";
+    width:8px; height:8px;
+    border-radius:50%;
+    background:#ffffff;
+  }
+  .pool-pin.hovered{
+    background:var(--sand);
+    transform: rotate(-45deg) scale(1.18);
+  }
+
+  /* Hover info card */
+  #infocard{
+    position:absolute;
+    top:16px; right:16px;
+    width:300px;
+    max-width:calc(100vw - 32px);
+    background:var(--card);
+    border-radius:14px;
+    box-shadow:0 10px 30px rgba(13,43,62,0.22);
+    padding:16px 18px 14px;
+    z-index:30;
+    display:none;
+    pointer-events:none;
+  }
+  #infocard.show{ display:block; }
+  #infocard h2{
+    margin:0 0 2px; font-size:1.02rem; line-height:1.25; color:var(--deep);
+  }
+  #infocard .city-tag{
+    display:inline-block;
+    font-size:0.7rem; font-weight:700; letter-spacing:0.3px;
+    color:var(--water);
+    background:#e2f2f1;
+    border-radius:20px;
+    padding:2px 9px;
+    margin:4px 0 10px;
+  }
+  #infocard .row{
+    font-size:0.82rem; color:var(--muted);
+    margin:6px 0;
+    line-height:1.4;
+    display:flex; gap:8px;
+  }
+  #infocard .row svg{ width:15px; height:15px; flex:none; margin-top:1px; color:var(--aqua); }
+  #infocard .hours-note{
+    font-size:0.76rem; color:#8a6a2c; background:#fbf1de; border-radius:8px;
+    padding:6px 8px; margin-top:8px;
+  }
+  #infocard .site-btn{
+    pointer-events:auto;
+    display:inline-flex; align-items:center; gap:6px;
+    margin-top:12px;
+    background:var(--water);
+    color:#fff; text-decoration:none;
+    font-size:0.82rem; font-weight:600;
+    padding:8px 14px; border-radius:9px;
+    transition: background 120ms ease, transform 120ms ease;
+  }
+  #infocard .site-btn:hover{ background:var(--deep); transform:translateY(-1px); }
+  #infocard .site-btn svg{ width:13px; height:13px; }
+
+  /* Leaflet popup (click) styling */
+  .leaflet-popup-content-wrapper{
+    border-radius:12px;
+  }
+  .leaflet-popup-content{
+    font-family: inherit;
+    font-size:0.85rem;
+    line-height:1.4;
+    margin:12px 14px;
+  }
+  .leaflet-popup-content b{ color:var(--deep); }
+  .popup-site{
+    display:inline-block; margin-top:8px;
+    background:var(--water); color:#fff !important;
+    padding:6px 12px; border-radius:8px;
+    text-decoration:none; font-weight:600; font-size:0.8rem;
+  }
+
+  footer{
+    background:var(--deep); color:#8fb9c2;
+    font-size:0.72rem; padding:7px 20px;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
+    z-index:20; position:relative;
+  }
+  footer a{ color:#cfe9e6; }
+
+  @media (max-width: 620px){
+    header h1{ font-size:1.1rem; }
+    header .hint{ display:none; }
+    #infocard{ left:12px; right:12px; width:auto; top:auto; bottom:12px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🏊 Lietuvos miestų baseinai</h1>
+    <span class="count" id="countLabel">27 vietos</span>
+    <span class="hint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+      Užveskite pelę ant žymeklio, spauskite nuorodą svetainei atverti
+    </span>
+  </header>
+
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="infocard"></div>
+  </div>
+
+  <footer>
+    <span>Duomenų šaltinis: kelionessuvaikais.lt sąrašas · žymeklių padėtys apytikslės (miesto lygio), tikslinti pagal poreikį.</span>
+    <span>Žemėlapis: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> autoriai</span>
+  </footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ---------------------------------------------------------------------
+// Data: 27 Lithuanian city swimming pools
+// (coordinates are city-level approximations unless noted "exact")
+// ---------------------------------------------------------------------
+const POOLS = [
+  { name:"Klaipėdos baseinas", city:"Klaipėda", address:"Dubysos g. 12, Klaipėda, LT-93231",
+    lat:55.68876, lng:21.153187,
+    hours:"I–V 06:00–22:00 (priklausomai nuo narystės tipo); VI–VII bet kuriuo darbo metu",
+    website:"https://www.klaipedosbaseinas.lt/" },
+  { name:"Girstučio baseinas Kaune", city:"Kaunas", address:"Kovo 11-osios g. 26, Kaunas, LT-51349",
+    lat:54.8770, lng:23.8800,
+    hours:"I–V 06:00–22:00 · VI–VII 09:00–21:00",
+    website:"https://www.girstuciobaseinas.lt/" },
+  { name:"Kupiškio baseinas", city:"Kupiškis", address:"K. Šimonio g. 1A, Kupiškis, LT-40117",
+    lat:55.8331, lng:24.9425,
+    hours:"I 12:00–20:00 · II–V 11:00–20:00 · VI–VII 10:00–19:00 (vasarą uždaryta VI 24–VIII 30)",
+    website:"https://www.kupiskiobaseinas.lt/" },
+  { name:"Anykščių baseinas „Bangenis“", city:"Anykščiai", address:"Ažupiečių g. 1A, Anykščiai, LT-29148",
+    lat:55.522004, lng:25.084346,
+    hours:"I–V 13:00–22:00 · VI–VII 10:00–22:00",
+    website:"https://sveikatosoaze.lt/" },
+  { name:"Jonavos baseinas", city:"Jonava", address:"Žeimių g. 17, Jonava, LT-55134",
+    lat:55.0847, lng:24.2836,
+    hours:"I 13:00–21:00 · II,IV 07:00–21:00 · III 08:00–21:00 · V 08:00–22:00 · VI 09:00–22:00 · VII 09:00–21:00",
+    website:"https://jonavosbaseinas.lt/" },
+  { name:"Molėtų baseinas", city:"Molėtai", address:"Ąžuolų g. 10, Molėtai, LT-33125",
+    lat:55.2350, lng:25.4100,
+    hours:"I–V 07:00–21:00 · VI–VII 09:00–21:00",
+    website:"https://www.moletubaseinas.lt/" },
+  { name:"Lazdynų baseinas", city:"Vilnius", address:"Erfurto g. 13, Vilnius, LT-04220",
+    lat:54.6748, lng:25.2075,
+    hours:"I–V 06:00–22:00 (VII–VIII iki 21:00) · VI–VII 08:00–21:00",
+    website:"https://www.lazdynubaseinas.eu/" },
+  { name:"Fabijoniškių baseinas", city:"Vilnius", address:"Vėtrungių g. 45A, Vilnius",
+    lat:54.7420, lng:25.2650,
+    hours:"I–V 06:00–22:00 · VI–VII 08:00–21:00",
+    website:"https://www.fabijoniskiubaseinas.lt/" },
+  { name:"Tichė vandens namai", city:"Šiauliai", address:"Latvių g. 60, Šiauliai, LT-76373",
+    lat:55.9349, lng:23.3140,
+    hours:"Tikslus grafikas neskelbtas viešai — tikrinti svetainėje",
+    website:"https://www.tichevandensnamai.lt/" },
+  { name:"Tauragės baseinas", city:"Tauragė", address:"Vytauto g. 141, Tauragė, LT-72210",
+    lat:55.2528, lng:22.2861,
+    hours:"I 13:00–21:00 · II–V 07:00–21:00 · VI 09:00–21:00 · VII 11:00–21:00",
+    website:"http://www.tauragesbaseinas.lt/" },
+  { name:"Rietavo baseinas", city:"Rietavas", address:"L. Ivinskio g. 5, Rietavas, LT-90311",
+    lat:55.7167, lng:21.9333,
+    hours:"Pilnas grafikas neskelbtas viešai — skambinti +370 666 21661",
+    website:"https://veiklusrietavas.lt/plaukimo-baseinas/" },
+  { name:"Palangos baseinas", city:"Palanga", address:"Kretingos g. 23, Palanga",
+    lat:55.9175, lng:21.0686,
+    hours:"I 12:00–22:00 · II–V 07:00–22:00 · VI 09:00–22:00 · VII 09:00–21:00",
+    website:"https://www.palangosbaseinas.lt/" },
+  { name:"Radviliškio plaukimo baseinas", city:"Radviliškis", address:"V. Kudirkos g. 2, Radviliškis, LT-82177",
+    lat:55.8075, lng:23.5461,
+    hours:"I 14:00–21:00 · II–V 08:00–21:00 · VI–VII 10:00–21:00",
+    website:"https://radviliskiobaseinas.lt/" },
+  { name:"Širvintų sporto centro baseinas", city:"Širvintos", address:"Kalnalaukio g. 41, Širvintos",
+    lat:55.0333, lng:24.9500,
+    hours:"Apytiksliai 10:00–22:00 kasdien, tiksliau — svetainėje",
+    website:"https://sirvintusportas.lt/baseinas-3/" },
+  { name:"Rokiškio baseinas", city:"Rokiškis", address:"Taikos g. 21A, Rokiškis, LT-42141",
+    lat:55.9666, lng:25.5847,
+    hours:"I 13:00–22:00 · II,IV 07:00–22:00 · III,V 08:00–22:00 · VI–VII 10:00–22:00",
+    website:"https://www.rokiskiobaseinas.lt/" },
+  { name:"Plungės sporto arenos baseinas", city:"Plungė", address:"Mendeno g. 1C, Plungė",
+    lat:55.9128, lng:21.8461,
+    hours:"I 13:00–22:00 · II–V 06:00–22:00 · VI–VII 08:00–22:00",
+    website:"https://plungesrc.lt/baseinas/" },
+  { name:"Šilutės laisvalaikio ir sporto namai", city:"Šilutė", address:"Rusnės g. 10A, Šilutė, LT-99185",
+    lat:55.3486, lng:21.4783,
+    hours:"I–V 06:30–21:00 · VI–VII 10:00–21:00",
+    website:"https://www.silutessportomokykla.lt/silutes-baseinas" },
+  { name:"Baseinas Šakių JKSC", city:"Šakiai", address:"V. Kudirkos g. 64, Šakiai, LT-71124",
+    lat:54.9500, lng:23.0500,
+    hours:"I–V 08:00–21:00 · VI–VII 11:00–20:00",
+    website:"https://sakiujksc.lt/" },
+  { name:"Varėnos baseinas", city:"Varėna", address:"J. Basanavičiaus g. 2A, Varėna, LT-65174",
+    lat:54.2167, lng:24.5667,
+    hours:"I 14:00–22:00 · II–VII 10:00–22:00",
+    website:"https://baseinas.varena.lt/" },
+  { name:"Prienų KKSC baseinas", city:"Prienai", address:"Pramonės g. 20, Prienai",
+    lat:54.6333, lng:23.9500,
+    hours:"Be pirties: I 14–17, II–IV 08–17, V 08–16 · Su pirtimi: I–IV 17–21, V 06–21, VI–VII 09–21",
+    website:"https://www.prienusportas.lt/baseinas/" },
+  { name:"Šilalės sporto ir laisvalaikio centras", city:"Šilalė", address:"Kovo 11-osios g. 15, Šilalė, LT-75126",
+    lat:55.4833, lng:22.1833,
+    hours:"Tikslus grafikas neskelbtas viešai — tel. (0 449) 41490",
+    website:"https://www.silalessportomokykla.lt/silales-baseinas" },
+  { name:"Pasvalio baseinas", city:"Pasvalys", address:"Taikos g. 22, Pasvalys, LT-39184",
+    lat:56.0608, lng:24.3986,
+    hours:"I 14:00–21:00 · II–VII 09:00–21:00",
+    website:"https://www.facebook.com/@pasvalysbaseinas/" },
+  { name:"Kretingos sporto centro baseinas", city:"Kretinga", address:"Savanorių g. 23A, Kretinga, LT-97111",
+    lat:55.8867, lng:21.2469,
+    hours:"I 13:00–22:00 · II–V 07:00–22:00 · VI–VII 09:00–21:00",
+    website:"https://kretingasc.lt/" },
+  { name:"Ignalinos sporto ir pramogų centras", city:"Ignalina", address:"Vasario 16-osios g. 35, Ignalina, LT-30112",
+    lat:55.3392, lng:26.1667,
+    hours:"I 14:00–20:00 · II–III 07:00–20:00 · IV–V 07:00–22:00 · VI–VII 11:00–22:00 (vasarą uždaryta)",
+    website:"https://ignalina-spa.lt/kainos/baseinas-ir-pirtys/" },
+  { name:"Ukmergės sporto centro baseinas", city:"Ukmergė", address:"Miškų g. 45, Ukmergė, LT-20145",
+    lat:55.2500, lng:24.7500,
+    hours:"Sezoninis (X–V). Ribotas grafikas — tikrinti sportasukmerge.lt",
+    website:"https://www.sportasukmerge.lt/baseinas" },
+  { name:"Alytaus baseinas (ASRC)", city:"Alytus", address:"Naujoji g. 52, Alytus, LT-62381",
+    lat:54.3833, lng:24.0500,
+    hours:"Sezoninis (uždaryta vasarą). Sezono metu I–V apytiksliai 08:00–12:00 — tikrinti asrc.lt",
+    website:"https://asrc.lt/paslaugos/baseinas/" },
+  { name:"Naujosios Akmenės baseinas", city:"Naujoji Akmenė", address:"Žemaitijos g. 2, Naujoji Akmenė, LT-85133",
+    lat:56.3167, lng:22.9000,
+    hours:"I 12:00–21:00 · II–IV 10:00–21:00 · V–VII 10:00–22:00",
+    website:"https://www.akmenesc.lt/" },
+];
+
+document.getElementById('countLabel').textContent = POOLS.length + ' vietos';
+
+// ---------------------------------------------------------------------
+// Map setup
+// ---------------------------------------------------------------------
+const map = L.map('map', { zoomControl:true }).setView([55.25, 23.9], 7);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+function poolIcon(){
+  return L.divIcon({
+    className: '',
+    html: '<div class="pool-pin"></div>',
+    iconSize: [26,26],
+    iconAnchor: [13,26],
+    popupAnchor: [0,-24]
+  });
+}
+
+const infocard = document.getElementById('infocard');
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function showCard(pool){
+  infocard.innerHTML = `
+    <h2>${escapeHtml(pool.name)}</h2>
+    <span class="city-tag">${escapeHtml(pool.city)}</span>
+    <div class="row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.5-7-11a7 7 0 1 1 14 0c0 4.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      <span>${escapeHtml(pool.address)}</span>
+    </div>
+    <div class="row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      <span>${escapeHtml(pool.hours)}</span>
+    </div>
+    <a class="site-btn" href="${pool.website}" target="_blank" rel="noopener">
+      Atverti svetainę
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>
+    </a>
+  `;
+  infocard.classList.add('show');
+}
+
+function hideCard(){
+  infocard.classList.remove('show');
+}
+
+const markers = [];
+
+POOLS.forEach(pool => {
+  const marker = L.marker([pool.lat, pool.lng], { icon: poolIcon() }).addTo(map);
+
+  marker.on('mouseover', function(){
+    this._icon.querySelector('.pool-pin').classList.add('hovered');
+    showCard(pool);
+  });
+  marker.on('mouseout', function(){
+    if (this._icon) this._icon.querySelector('.pool-pin').classList.remove('hovered');
+    hideCard();
+  });
+
+  // Click (useful on touch devices where hover doesn't exist): popup with a
+  // real link — the new tab only opens when that link itself is pressed.
+  marker.bindPopup(
+    `<b>${escapeHtml(pool.name)}</b><br>${escapeHtml(pool.city)}<br>${escapeHtml(pool.hours)}<br>
+     <a class="popup-site" href="${pool.website}" target="_blank" rel="noopener">Atverti svetainę ↗</a>`
+  );
+
+  markers.push(marker);
+});
+
+// Fit map to all markers with some padding
+const group = L.featureGroup(markers);
+map.fitBounds(group.getBounds().pad(0.15));
+</script>
+</body>
+</html>
