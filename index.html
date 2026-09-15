@@ -73,6 +73,14 @@
   .popup-content ul { margin: 0.35rem 0; padding-left: 1.1rem; font-size: 0.85rem; }
   .popup-content a { font-size: 0.85rem; }
 
+  /* Custom pin marker: plain SVG glyph, no box/background behind it */
+  .pin-icon,
+  .leaflet-div-icon.pin-icon {
+    background: transparent;
+    border: none;
+  }
+  .pin-icon svg { display: block; }
+
   @media (max-width: 760px) {
     .layout { flex-direction: column; }
     #map { flex: 0 0 55%; width: 100%; }
@@ -257,6 +265,26 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(map);
 
+// Plain SVG pin, no background box — color is swapped to highlight the active pool.
+const PIN_COLOR_DEFAULT = "#2563eb";
+const PIN_COLOR_ACTIVE = "#e63946";
+
+function pinIcon(color) {
+  const svg = `
+    <svg width="28" height="40" viewBox="0 0 28 40" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 26 14 26s14-15.5 14-26c0-7.7-6.3-14-14-14z"
+            fill="${color}" stroke="#ffffff" stroke-width="1.5"/>
+      <circle cx="14" cy="14" r="5.5" fill="#ffffff"/>
+    </svg>`;
+  return L.divIcon({
+    className: "pin-icon",
+    html: svg,
+    iconSize: [28, 40],
+    iconAnchor: [14, 40],
+    popupAnchor: [0, -36]
+  });
+}
+
 const markers = [];
 let activeIndex = null;
 
@@ -264,8 +292,10 @@ function setActive(index) {
   if (activeIndex !== null) {
     const prevItem = document.querySelector(`.pool-item[data-index="${activeIndex}"]`);
     if (prevItem) prevItem.classList.remove("active");
+    markers[activeIndex].setIcon(pinIcon(PIN_COLOR_DEFAULT));
   }
   activeIndex = index;
+  markers[index].setIcon(pinIcon(PIN_COLOR_ACTIVE));
   const item = document.querySelector(`.pool-item[data-index="${index}"]`);
   if (item) {
     item.classList.add("active");
@@ -274,8 +304,8 @@ function setActive(index) {
 }
 
 pools.forEach((pool, index) => {
-  const marker = L.marker([pool.coordinates.lat, pool.coordinates.lng]).addTo(map);
-  marker.bindPopup(popupHtml(pool));
+  const marker = L.marker([pool.coordinates.lat, pool.coordinates.lng], { icon: pinIcon(PIN_COLOR_DEFAULT) }).addTo(map);
+  marker.bindPopup(popupHtml(pool), { autoPan: false });
   marker.on("click", () => setActive(index));
   markers.push(marker);
 });
@@ -293,9 +323,8 @@ pools.forEach((pool, index) => {
   item.innerHTML = `<strong>${escapeHtml(pool.name)}</strong><span class="pool-city">${escapeHtml(pool.city)}</span>`;
   item.addEventListener("click", () => {
     const marker = markers[index];
-    map.setView(marker.getLatLng(), 13, { animate: true });
-    marker.openPopup();
     setActive(index);
+    marker.openPopup();
   });
   listEl.appendChild(item);
 });
