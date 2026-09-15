@@ -68,10 +68,27 @@
   .pool-item strong { display: block; font-size: 0.95rem; }
   .pool-item .pool-city { font-size: 0.8rem; color: var(--pico-muted-color); }
 
-  .popup-content h4 { margin: 0 0 0.35rem; font-size: 1rem; }
-  .popup-content p { margin: 0.15rem 0; font-size: 0.85rem; }
-  .popup-content ul { margin: 0.35rem 0; padding-left: 1.1rem; font-size: 0.85rem; }
-  .popup-content a { font-size: 0.85rem; }
+  .popup-content { max-width: 230px; }
+  .popup-content h4 { margin: 0 0 0.2rem; font-size: 1rem; }
+  .popup-content .popup-meta { margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--pico-muted-color); }
+  .popup-content .popup-hours { margin: 0 0 0.3rem; font-size: 0.82rem; line-height: 1.4; }
+  .popup-content .popup-note { margin: 0 0 0.55rem; font-size: 0.75rem; color: var(--pico-muted-color); }
+  .popup-content .popup-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    background-color: var(--pico-primary);
+    color: var(--pico-primary-inverse);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .popup-content .popup-link:hover { background-color: var(--pico-primary-hover); }
+
+  .leaflet-popup-content-wrapper { border-radius: 10px; }
+  .leaflet-popup-content { margin: 12px 14px; }
 
   /* Custom pin marker: plain SVG glyph, no box/background behind it */
   .pin-icon,
@@ -263,14 +280,15 @@ const pools = [
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-const DAY_LT = {
-  monday: "Pirmadienis", tuesday: "Antradienis", wednesday: "Trečiadienis",
-  thursday: "Ketvirtadienis", friday: "Penktadienis", saturday: "Šeštadienis", sunday: "Sekmadienis"
+// Compact Lithuanian day-range labels using roman numerals (I=Pirmadienis ... VII=Sekmadienis)
+const DAY_ROMAN = {
+  monday: "I", tuesday: "II", wednesday: "III",
+  thursday: "IV", friday: "V", saturday: "VI", sunday: "VII"
 };
 
-function formatHoursLabel(key) {
-  if (key === "note") return "Pastaba";
-  return key.split("_").map(p => DAY_LT[p] || p).join("–");
+function formatHoursKeyShort(key) {
+  const romans = key.split("_").map(p => DAY_ROMAN[p] || p);
+  return romans.length > 1 ? `${romans[0]}–${romans[romans.length - 1]}` : romans[0];
 }
 
 function escapeHtml(str) {
@@ -282,16 +300,20 @@ function escapeHtml(str) {
 }
 
 function popupHtml(pool) {
-  const hours = Object.entries(pool.working_hours || {})
-    .map(([k, v]) => `<li><strong>${escapeHtml(formatHoursLabel(k))}:</strong> ${escapeHtml(v)}</li>`)
-    .join("");
+  const entries = Object.entries(pool.working_hours || {});
+  const dayLine = entries
+    .filter(([k]) => k !== "note")
+    .map(([k, v]) => `${formatHoursKeyShort(k)} ${v}`)
+    .join(" · ");
+  const note = entries.find(([k]) => k === "note");
 
   return `
     <div class="popup-content">
       <h4>${escapeHtml(pool.name)}</h4>
-      <p>${escapeHtml(pool.address)}</p>
-      ${hours ? `<ul>${hours}</ul>` : ""}
-      ${pool.website ? `<p><a href="${escapeHtml(pool.website)}" target="_blank" rel="noopener">Svetainė</a></p>` : ""}
+      <p class="popup-meta">${escapeHtml(pool.city)}</p>
+      ${dayLine ? `<p class="popup-hours">${escapeHtml(dayLine)}</p>` : ""}
+      ${note ? `<p class="popup-note">${escapeHtml(note[1])}</p>` : ""}
+      ${pool.website ? `<a class="popup-link" href="${escapeHtml(pool.website)}" target="_blank" rel="noopener">Atverti svetainę ↗</a>` : ""}
     </div>
   `;
 }
@@ -346,7 +368,7 @@ function setActive(index) {
 
 pools.forEach((pool, index) => {
   const marker = L.marker([pool.coordinates.lat, pool.coordinates.lng], { icon: pinIcon(PIN_COLOR_DEFAULT) }).addTo(map);
-  marker.bindPopup(popupHtml(pool), { autoPan: false });
+  marker.bindPopup(popupHtml(pool), { autoPan: false, minWidth: 200, maxWidth: 240 });
   marker.on("click", () => setActive(index));
   markers.push(marker);
 });
