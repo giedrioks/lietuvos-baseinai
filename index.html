@@ -81,6 +81,47 @@
   }
   .pin-icon svg { display: block; }
 
+  /*
+    Pico's global CSS styles any element with role="button" (which Leaflet's
+    zoom control links use) as a full padded button. Reset those links back
+    to Leaflet's own small square control look.
+  */
+  .leaflet-bar a {
+    all: unset;
+    display: block !important;
+    box-sizing: border-box !important;
+    width: 26px !important;
+    height: 26px !important;
+    line-height: 26px !important;
+    text-align: center !important;
+    cursor: pointer !important;
+    background-color: #fff !important;
+    color: #333 !important;
+    font: bold 18px 'Lucida Console', Monaco, monospace !important;
+    text-decoration: none !important;
+  }
+  .leaflet-bar a:hover { background-color: #f4f4f4 !important; }
+  .leaflet-bar a:first-child { border-radius: 4px 4px 0 0 !important; }
+  .leaflet-bar a:last-child {
+    border-radius: 0 0 4px 4px !important;
+    border-top: 1px solid #ccc !important;
+  }
+  .leaflet-bar {
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Leaflet makes markers keyboard-focusable; drop Pico's focus ring so no
+     stray box appears around a pin or control when it's clicked/focused. */
+  .leaflet-container a:focus,
+  .leaflet-container a:focus-visible,
+  .leaflet-marker-icon:focus,
+  .leaflet-marker-icon:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
   @media (max-width: 760px) {
     .layout { flex-direction: column; }
     #map { flex: 0 0 55%; width: 100%; }
